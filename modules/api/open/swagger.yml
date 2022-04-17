@@ -1,0 +1,254 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: DashEat
+  description: placeholder
+
+servers:
+  - url: /test
+
+paths:
+  /{user_type}/auth/signup:
+    post:
+      description: Sign up user
+      x-amazon-apigateway-integration:
+        uri: ${signup_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+      parameters:
+      - in: path
+        name: user_type
+        required: true
+        schema:
+          type: string
+          description: "The user type: dasher, user or vendor"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - first_name
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                first_name:
+                  type: string
+
+      responses:
+        '200':
+          description: Successfully signed up, waiting for activation
+        '400':
+          description: services error
+        '401':
+          description: Invalid password_policy
+        '409':
+          description: Username already exists
+        '412':
+          description: Invalid email format
+        '416':
+          description: Form validation error
+
+
+  /{user_type}/auth/activate:
+      put:
+        description: Activate user account
+        x-amazon-apigateway-integration:
+          uri: ${confirm_signup_uri}
+          passthroughBehavior: "when_no_match"
+          httpMethod: POST
+          type: aws_proxy
+        parameters:
+        - in: path
+          name: user_type
+          required: true
+          schema:
+            type: string
+            description: "The type of user: dasher, user or vendor"
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - email
+                  - code
+                properties:
+                  email:
+                    type: string
+                  code:
+                    type: string
+
+        responses:
+          '200':
+            description: Successfully activated account
+          '400':
+            description: Services error
+          '401':
+            description: Invalid activation code
+          '403':
+            description: Method failed, too many attempts
+          '406':
+            description: This activation code has expired
+
+
+  /{user_type}/auth/signin:
+    post:
+      description: Sign in user
+      x-amazon-apigateway-integration:
+        uri: ${signin_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+      parameters:
+      - in: path
+        name: user_type
+        required: true
+        schema:
+          type: string
+          description: "The user type: dasher, user or vendor"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+
+      responses:
+        '200':
+          description: Successfully signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_access_token:
+                    type: string
+                  user_api_key:
+                    type: string
+
+        '400':
+          description: Invalid request
+        '404':
+          description: Username not found
+        '407':
+          description: Unconfirmed user
+
+  /{user_type}/auth/resend_code:
+    get:
+      description: Resend confirmation code
+      x-amazon-apigateway-integration:
+        uri: ${resend_confirmation_code_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+      parameters:
+      - in: path
+        name: user_type
+        required: true
+        schema:
+          type: string
+
+      - in: query
+        name: email
+        required: true
+        schema:
+          type: string
+
+      responses:
+        '200':
+          description: Confirmation code sent
+        '400':
+          description: Services error
+
+  /{user_type}/auth/forgot_password:
+    get:
+      description: Retrieve a forgotten password
+      x-amazon-apigateway-integration:
+        uri: ${forgot_password_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+      parameters:
+        - in: path
+          name: user_type
+          required: true
+          schema:
+            type: string
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: OTP has been sent successfully
+        '400':
+          description: Invalid request
+        '404':
+          description: User does not exist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /{user_type}/auth/confirm_forgot_password:
+    post:
+      description: Verify identity and supply new password
+      x-amazon-apigateway-integration:
+        uri: ${confirm_forgot_password_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+      parameters:
+      - in: path
+        name: user_type
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - code
+                - new_password
+              properties:
+                email:
+                  type: string
+                code:
+                  type: string
+                new_password:
+                  type: string
+
+      responses:
+        '200':
+          description: Password successfully reset
+        '400':
+          description: Invalid request
+        '401':
+          description: Invalid password
+        '403':
+          description: Code has expired

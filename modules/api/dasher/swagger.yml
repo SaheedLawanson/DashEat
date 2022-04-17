@@ -1,0 +1,193 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: DashEat
+  description: placeholder
+
+servers:
+  - url: "/${env}"
+
+components:
+  securitySchemes:
+    api_key:
+      type: "apiKey"
+      name: "x-api-key"
+      in: "header"
+    authorizer_lambda:
+      type: apiKey         # Must be apiKey for api gateway API
+      name: authorizationToken  # Name of header containing token
+      in: header           # Must be in header
+      x-amazon-apigateway-authtype: custom
+      x-amazon-apigateway-authorizer:
+        type: token
+        authorizerUri: "${authorizer_uri}"
+
+security:
+  - authorizer_lambda: []
+  - api_key: []
+
+paths:
+  /change_password:
+    post:
+      description: Change password
+      x-amazon-apigateway-integration:
+        uri: ${change_password_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - previous_password
+                - new_password
+              properties:
+                previous_password:
+                  type: string
+                new_password:
+                  type: string
+
+      responses:
+        '200':
+          description: Password successfully changed
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+
+  /delete_user:
+    delete:
+      description: Delete user
+      x-amazon-apigateway-integration:
+        uri: ${delete_user_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+
+      responses:
+        '200':
+          description: Succesfully deleted user
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /view_profile:
+    get:
+      description: Get full profile
+      x-amazon-apigateway-integration:
+        uri: ${view_profile_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+
+      responses:
+        '200':
+          description: Succesfully deleted user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      first_ name:
+                        type: string
+                      last_name:
+                        type: string
+                      gender:
+                        type: string
+                      birth_date:
+                        type: string
+                      address:
+                        type: string
+                      contact_no:
+                        type: number
+                      email:
+                        type: string
+                      wallet:
+                        type: string
+                      profile_img:
+                        type: string
+                      status:
+                        type: string
+                      rating:
+                        type: number
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /update_profile:
+    put:
+      description: Update profile
+      x-amazon-apigateway-integration:
+        uri: ${update_profile_uri}
+        passthroughBehavior: "when_no_match"
+        httpMethod: POST
+        type: aws_proxy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                last_name:
+                  type: string
+                gender:
+                  type: string
+                birth_date:
+                  type: string
+                address:
+                  type: string
+                contact_no:
+                    type: number
+                profile_img:
+                  type: string
+                status:
+                  type: string
+      responses:
+        '200':
+          description: Succesfully deleted user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
