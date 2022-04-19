@@ -38,6 +38,10 @@ resource "aws_lambda_function" "signup_lambda" {
             DASHER_TABLE_NAME = var.DASHER_TABLE_NAME
             USER_TABLE_NAME = var.USER_TABLE_NAME
             VENDOR_TABLE_NAME = var.VENDOR_TABLE_NAME
+
+            DASHER_USAGE_PLAN = "${var.DASHER_USAGE_PLAN}"
+            USER_USAGE_PLAN = "${var.USER_USAGE_PLAN}"
+            VENDOR_USAGE_PLAN = "${var.VENDOR_USAGE_PLAN}"
         }
     }
 }
@@ -170,14 +174,6 @@ resource "aws_lambda_function" "change_password_lambda" {
     depends_on = [
         data.archive_file.create_dist_pkg["change_password"]
     ]
-
-    # environment {
-    #     variables = {
-    #         DASHER_USAGE_PLAN = "${var.DASHER_USAGE_PLAN}"
-    #         USER_USAGE_PLAN = "${var.USER_USAGE_PLAN}"
-    #         VENDOR_USAGE_PLAN = "${var.VENDOR_USAGE_PLAN}"
-    #     }
-    # }
 }
 
 resource "aws_lambda_function" "delete_user_lambda" {

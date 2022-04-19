@@ -6,3 +6,7 @@ variable env {
     type = string
     default = "dev"
 }
+
+variable api_key_source {
+    default = "AUTHORIZER"
+}

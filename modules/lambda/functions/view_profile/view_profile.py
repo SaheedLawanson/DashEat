@@ -1,25 +1,41 @@
 import boto3, json, os
 
 # generates response object
-def response_object(error_status, message=None, data=None):
+def response_object(error_status, message=None, data=None, error_code=400):
+    code = error_code if error_status else 200
     return {
-                "statusCode": 400 if error_status == True else 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
+                "statusCode": code,
                 "body": json.dumps({
                     "error": error_status,
+                    "status_code": code,
                     "message": message,
                     "data": data
                 })
             }
 
-# Auxiliary functions
-def view_profile(user_type, current_user):
-    # Create clients
-    dynamodb_client = boto3.resource("dynamodb")
 
-    # Define the accepted schema
+# Auxiliary functions
+def view_profile(current_user, table, schema):
+
+    # Get current user
+    result = table.get_item(
+        Key = { "email": current_user }
+    )
+    item = result["Item"]
+
+    user_profile = {}
+    for attr in schema["properties"]:
+        if attr in item:
+            user_profile[attr] = item[attr]
+        else:
+            user_profile[attr] = ""
+
+    return user_profile
+
+
+
+# Main function
+def lambda_handler(event, context):
     schemas = {
         "dasher": {
             "type": "object",
@@ -39,12 +55,13 @@ def view_profile(user_type, current_user):
                 # "registration_date": "string", # Should be immutable
                 "status": "string", # Should be immutable
                 "rating": "number"
-            }
+            },
+            "additionalProperties": False
         },
         "user": {
             "type": "object",
             "properties": {
-                 "first_name": "string", # Should be immutable
+                "first_name": "string", # Should be immutable
                 "last_name": "string", # Should be immutable
                 "gender": "string", # Should be immutable
                 "birth_date": "string", # Should be immutable
@@ -56,7 +73,8 @@ def view_profile(user_type, current_user):
                 "profile_img": "string",
                 "lat": "number",
                 "long": "number",
-            }
+            },
+            "additionalProperties": False
         },
         "vendor": {
             "type": "object",
@@ -68,43 +86,39 @@ def view_profile(user_type, current_user):
                 "menu": "list",
                 "email": "string",
                 "rating": "number" # Should be immutable
-            }
+            },
+            "additionalProperties": False
         }
     }
 
+    # RESOURCE HANDLES
+    # Clients
+    dynamodb_client = boto3.resource("dynamodb")
+    exceptions = boto3.client("dynamodb").exceptions
+
     try:
-        # Get current user
+        # Event variables
+        email = event["requestContext"]["authorizer"]["principalId"]
+        user_type = event["stageVariables"]["user_type"]
+
         table_name = os.environ[user_type.upper()+"_TABLE_NAME"]
         table = dynamodb_client.Table(table_name)
-        result = table.get_item(
-            Key = {"email": current_user}
+
+        user_profile = view_profile(
+            current_user = email,
+            table = table,
+            schema = schemas[user_type]
         )
-
-        data = result["Item"]
-        data.pop("api_key")
-        user_profile = {}
-
-        for attr in schemas[user_type]["properties"]:
-            if attr in data:
-                user_profile[attr] = data[attr]
-            else:
-                user_profile[attr] = ""
 
         message = "Profile successfully fetched"
         return response_object(False, message, data = user_profile)
 
+    except exceptions.ResourceNotFoundException:
+        message = "This user does not exist"
+        return response_object(True, message, error_code = 401)
+
     except Exception as err:
-        return response_object(True, err.__str__())
-
-# Main function
-def lambda_handler(event, context):
-    # Event variables
-    email = event["requestContext"]["authorizer"]["principalId"]
-
-    return view_profile(
-        user_type = event["stageVariables"]["user_type"],
-        current_user = email
-    )
+        return response_object(True, err.__str__(), error_code = 400)
 
 # event = {
 #     "queryStringParameters": {

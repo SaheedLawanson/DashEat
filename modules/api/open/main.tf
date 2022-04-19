@@ -2,6 +2,7 @@ data "template_file" "swagger" {
     template = "${file("${path.module}/swagger.yml")}"
 
     vars = {
+        env = var.ENV
         signup_uri = var.SIGNUP_LAMBDA_INVOKE_ARN
         confirm_signup_uri = var.CONFIRM_SIGNUP_LAMBDA_INVOKE_ARN
         signin_uri = var.SIGNIN_LAMBDA_INVOKE_ARN

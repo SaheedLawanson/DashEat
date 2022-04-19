@@ -15,6 +15,7 @@ resource "aws_api_gateway_rest_api" "user_api" {
   name = "${var.ENV}_user_dash_eat"
   body = data.template_file.swagger.rendered
   description = "REST API for users in the ${var.ENV} environment"
+  api_key_source = var.API_KEY_SOURCE
 }
 
 resource "aws_api_gateway_deployment" "user_api_deployment" {

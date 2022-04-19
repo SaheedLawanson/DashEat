@@ -1,4 +1,5 @@
 variable ENV {}
+variable API_KEY_SOURCE {}
 variable core_functions {
     type = set(string)
     default = [

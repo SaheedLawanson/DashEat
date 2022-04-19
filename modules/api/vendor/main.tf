@@ -16,6 +16,7 @@ resource "aws_api_gateway_rest_api" "vendor_api" {
     name = "${var.ENV}_vendor_dash_eat"
     body = data.template_file.swagger.rendered
     description = "REST API for vendors in the ${var.ENV} environment"
+    api_key_source = var.API_KEY_SOURCE
 }
 
 resource "aws_api_gateway_deployment" "vendor_api_deployment" {

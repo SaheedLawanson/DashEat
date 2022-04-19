@@ -17,6 +17,7 @@ data "template_file" "swagger" {
 resource "aws_api_gateway_rest_api" "dasher_api" {
     name = "${var.ENV}_dasher_dash_eat"
     body = data.template_file.swagger.rendered
+    api_key_source = var.API_KEY_SOURCE
     description = "REST API for dashers in the ${var.ENV} environment"
 }
 

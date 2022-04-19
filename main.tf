@@ -125,10 +125,10 @@ module "lambdas" {
     USER_TABLE_NAME = module.user_dynamodb.TABLE_NAME
     VENDOR_TABLE_NAME = module.vendor_dynamodb.TABLE_NAME
 
-    # # USAGE PLANS
-    # DASHER_USAGE_PLAN = module.dasher_api.USAGE_PLAN
-    # USER_USAGE_PLAN = module.user_api.USAGE_PLAN
-    # VENDOR_USAGE_PLAN = module.vendor_api.USER_USAGE_PLAN
+    # USAGE PLANS
+    DASHER_USAGE_PLAN = module.usage_plan.DASHER_USAGE_PLAN_ID
+    USER_USAGE_PLAN = module.usage_plan.USER_USAGE_PLAN_ID
+    VENDOR_USAGE_PLAN = module.usage_plan.VENDOR_USAGE_PLAN_ID
 
     # COGNITO POOLS
     DASHER_USERPOOL_ID = module.cognito_userpool.DASHER_USERPOOL_ID
@@ -174,6 +174,7 @@ module "open_api" {
 module "dasher_api" {
     source = "./modules/api/dasher"
     ENV = var.env
+    API_KEY_SOURCE = var.api_key_source
 
     DELETE_USER_LAMBDA_INVOKE_ARN = module.lambdas.DELETE_USER_LAMBDA_INVOKE_ARN
     CHANGE_PASSWORD_LAMBDA_INVOKE_ARN = module.lambdas.CHANGE_PASSWORD_LAMBDA_INVOKE_ARN
@@ -187,6 +188,7 @@ module "dasher_api" {
 module "user_api" {
     source = "./modules/api/user"
     ENV = var.env
+    API_KEY_SOURCE = var.api_key_source
 
     DELETE_USER_LAMBDA_INVOKE_ARN = module.lambdas.DELETE_USER_LAMBDA_INVOKE_ARN
     CHANGE_PASSWORD_LAMBDA_INVOKE_ARN = module.lambdas.CHANGE_PASSWORD_LAMBDA_INVOKE_ARN
@@ -197,6 +199,7 @@ module "user_api" {
 module "vendor_api" {
     source = "./modules/api/vendor"
     ENV = var.env
+    API_KEY_SOURCE = var.api_key_source
 
     DELETE_USER_LAMBDA_INVOKE_ARN = module.lambdas.DELETE_USER_LAMBDA_INVOKE_ARN
     CHANGE_PASSWORD_LAMBDA_INVOKE_ARN = module.lambdas.CHANGE_PASSWORD_LAMBDA_INVOKE_ARN

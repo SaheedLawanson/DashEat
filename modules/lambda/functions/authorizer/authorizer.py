@@ -1,22 +1,8 @@
 import boto3, os, json
 
 # Auxiliary functions
-# generates response object
-def response_object(error_status, message=None, data=None):
-    return {
-                "statusCode": 400 if error_status == True else 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
-                "body": json.dumps({
-                    "error": error_status,
-                    "message": message,
-                    "data": data
-                })
-            }
-
 # generates policy document
-def policy_document(user_ID, effect):
+def policy_document(effect, user_ID=None, api_key=None):
     return {
         "principalId": user_ID, # The principal user identification associated with the token sent by the client.
         "policyDocument": {
@@ -28,13 +14,15 @@ def policy_document(user_ID, effect):
                     "Resource": "arn:aws:execute-api:*:*:*/*/*/*"
                 }
             ]
-        }
+        },
+        "usageIdentifierKey": api_key
     }
 
 
 def lambda_handler(event, context):
     # Create clients
     cognito_client = boto3.client("cognito-idp")
+    apigateway_client = boto3.client("apigateway")
 
     # Arguments
     token = event["authorizationToken"]
@@ -44,11 +32,19 @@ def lambda_handler(event, context):
         response = cognito_client.get_user(
             AccessToken = token
         )
+        user = response["Username"]
 
-        return policy_document(response["Username"], "Allow")
+        # API key
+        api_keys = apigateway_client.get_api_keys(
+            nameQuery = user,
+            includeValues = True
+        )
+
+        api_key = api_keys["items"][0]["value"]
+        return policy_document("Allow", user, api_key)
 
     except Exception as err:
-        return policy_document(None, "Deny")
+        return policy_document("Deny")
 
 
 # test_event = {

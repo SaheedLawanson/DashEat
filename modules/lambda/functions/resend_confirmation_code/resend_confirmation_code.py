@@ -8,18 +8,18 @@ cognito_client_IDs = {
 
 # Auxiliary functions
 # generates response object
-def response_object(error_status, message=None, data=None, error_code=None):
+def response_object(error_status, message=None, data=None, error_code=400):
+    code = error_code if error_status else 200
     return {
-                "statusCode": error_code if error_status == True else 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
+                "statusCode": code,
                 "body": json.dumps({
                     "error": error_status,
+                    "status_code": code,
                     "message": message,
                     "data": data
                 })
             }
+
 
 
 def lambda_handler(event, context):
@@ -37,8 +37,13 @@ def lambda_handler(event, context):
         )
 
         return response_object(False, data=response)
+
+    except cognito_client.exceptions.UserNotFoundException:
+        message = "This user does not exist"
+        return response_object(True, message, error_code = 401)
+
     except Exception as err:
-        return response_object(True, err, 400)
+        return response_object(True, err)
 
 
 # test_event = {

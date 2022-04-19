@@ -8,72 +8,77 @@ cognito_client_IDs = {
 
 # Auxiliary functions
 # generates response object
-def response_object(error_status, message=None, data=None, error_code=None):
+def response_object(error_status, message=None, data=None, error_code=400):
+    code = error_code if error_status else 200
     return {
-                "statusCode": error_code if error_status == True else 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
+                "statusCode": code,
                 "body": json.dumps({
                     "error": error_status,
+                    "status_code": code,
                     "message": message,
                     "data": data
                 })
             }
 
+
 # Signs in users
-def signin(username, password, client_ID, user_type):
-    # Create clients
-    cognito_client = boto3.client("cognito-idp")
-    dynamodb_client = boto3.resource("dynamodb")
+def signin(username, password, client_ID, auth_client, table):
+    # Get token
+    response = auth_client.initiate_auth(
+        AuthFlow = "USER_PASSWORD_AUTH",
+        AuthParameters = {
+            "USERNAME": username,
+            "PASSWORD": password,
+        },
+        ClientId = client_ID
+    )
 
-    table_name = os.environ[user_type.upper()+"_TABLE_NAME"]
-    table = dynamodb_client.Table(table_name)
+    data = {
+        "user_access_token": response["AuthenticationResult"]["AccessToken"],
+    }
+    return data
 
-    try:
-        # Get API key
-        user_data = table.get_item(
-            Key = {"email": username},
-        )
-
-        # Get token
-        response = cognito_client.initiate_auth(
-            AuthFlow = "USER_PASSWORD_AUTH",
-            AuthParameters = {
-                "USERNAME": username,
-                "PASSWORD": password,
-            },
-            ClientId = client_ID
-        )
-
-        val = {
-            "user_access_token": response["AuthenticationResult"]["AccessToken"],
-            "user_api_key": user_data["Item"]["api_key"]
-        }
-        return response_object(False, data = val)
-
-    except cognito_client.exceptions.UserNotFoundException:
-        message = "Invalid username or password"
-        return response_object(True, message, error_code=404)
-    except cognito_client.exceptions.UserNotConfirmedException:
-        message = "Please activate your account before sign in"
-        return response_object(True, message, error_code = 407)
-    except Exception as err:
-        return response_object(True, err.__str__(), error_code = 400)
 
 
 # Main function
 def lambda_handler(event, context):
-    # Arguments
-    body = json.loads(event["body"])
-    user_type = event["pathParameters"]["user_type"]
+    # RESOURCE HANDLES
+    # Create clients
+    cognito_client = boto3.client("cognito-idp")
+    dynamodb_client = boto3.resource("dynamodb")
 
-    return signin(
-        username = body["email"],
-        password = body["password"],
-        client_ID = cognito_client_IDs[user_type],
-        user_type = user_type
-    )
+    try:
+        # Arguments
+        body = json.loads(event["body"])
+        user_type = event["pathParameters"]["user_type"]
+
+        table_name = os.environ[user_type.upper()+"_TABLE_NAME"]
+        table = dynamodb_client.Table(table_name)
+
+        data = signin(
+            username = body["email"],
+            password = body["password"],
+            client_ID = cognito_client_IDs[user_type],
+            auth_client = cognito_client,
+            table = table
+        )
+
+        return response_object(False, data = data)
+
+    except cognito_client.exceptions.UserNotFoundException:
+        message = "Invalid username or password"
+        return response_object(True, message, error_code = 404)
+
+    except cognito_client.exceptions.NotAuthorizedException:
+        message = "Incorrect password"
+        return response_object(True, message, error_code = 401)
+
+    except cognito_client.exceptions.UserNotConfirmedException:
+        message = "Please activate your account before sign in"
+        return response_object(True, message, error_code = 407)
+
+    except Exception as err:
+        return response_object(True, err.__str__(), error_code = 400)
 
 # test_event = {
 #     "body": json.dumps({

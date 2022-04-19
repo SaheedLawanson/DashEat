@@ -5,7 +5,7 @@ info:
   description: placeholder
 
 servers:
-  - url: /test
+  - url: /dev
 
 paths:
   /{user_type}/auth/signup:
@@ -44,17 +44,27 @@ paths:
       responses:
         '200':
           description: Successfully signed up, waiting for activation
+
         '400':
           description: services error
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
         '401':
-          description: Invalid password_policy
-        '409':
-          description: Username already exists
-        '412':
+          description: Required fields are missing
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
+        '402':
           description: Invalid email format
-        '416':
-          description: Form validation error
-
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
+        '403':
+          description: Username already exists
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
+        '405':
+          description: Form doesnt match required schema
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
 
   /{user_type}/auth/activate:
       put:
@@ -89,15 +99,23 @@ paths:
         responses:
           '200':
             description: Successfully activated account
+
           '400':
             description: Services error
+            schema:
+              $ref: '#/definitions/MODELdbcc73'
           '401':
             description: Invalid activation code
+            schema:
+              $ref: '#/definitions/MODELdbcc73'
           '403':
             description: Method failed, too many attempts
+            schema:
+              $ref: '#/definitions/MODELdbcc73'
           '406':
             description: This activation code has expired
-
+            schema:
+              $ref: '#/definitions/MODELdbcc73'
 
   /{user_type}/auth/signin:
     post:
@@ -144,10 +162,20 @@ paths:
 
         '400':
           description: Invalid request
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
+        '401':
+          description: Incorrect password
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
         '404':
           description: Username not found
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
         '407':
           description: Unconfirmed user
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
 
   /{user_type}/auth/resend_code:
     get:
@@ -173,8 +201,11 @@ paths:
       responses:
         '200':
           description: Confirmation code sent
+
         '400':
           description: Services error
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
 
   /{user_type}/auth/forgot_password:
     get:
@@ -199,17 +230,15 @@ paths:
       responses:
         '200':
           description: OTP has been sent successfully
+
         '400':
           description: Invalid request
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
         '404':
           description: User does not exist
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
 
   /{user_type}/auth/confirm_forgot_password:
     post:
@@ -246,9 +275,30 @@ paths:
       responses:
         '200':
           description: Password successfully reset
+
         '400':
           description: Invalid request
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
         '401':
           description: Invalid password
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
         '403':
           description: Code has expired
+          schema:
+            $ref: '#/definitions/MODELdbcc73'
+
+
+definitions:
+  MODELdbcc73:
+    type: object
+    properties:
+      error:
+        type: string
+      status_code:
+        type: number
+      message:
+        type: string
+      data:
+        type: string

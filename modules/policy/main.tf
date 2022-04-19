@@ -212,7 +212,8 @@ data "aws_iam_policy_document" "delete_user_policy_doc" {
   statement {
     # sid         = "Delete from API keys"
     actions      = [
-      "apigateway:POST"
+      "apigateway:GET",
+      "apigateway:DELETE",
     ]
     effect      = "Allow"
     resources    = [
@@ -284,6 +285,15 @@ data "aws_iam_policy_document" "authorizer_policy_doc" {
     # sid       = "Authorize_users"
     actions    = [
       "cognito-idp:GetUser"
+    ]
+    effect    = "Allow"
+    resources  = ["*"]
+  }
+
+  statement {
+    # sid       = "Authorize_users"
+    actions    = [
+      "apigateway:GET"
     ]
     effect    = "Allow"
     resources  = ["*"]

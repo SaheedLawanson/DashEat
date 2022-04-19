@@ -3,13 +3,12 @@ import boto3, os, json
 # Auxiliary functions
 # generates response object
 def response_object(error_status, message=None, data=None, error_code=400):
+    code = error_code if error_status else 200
     return {
-                "statusCode": error_code if error_status == True else 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
+                "statusCode": code,
                 "body": json.dumps({
                     "error": error_status,
+                    "status_code": code,
                     "message": message,
                     "data": data
                 })
@@ -21,9 +20,10 @@ def lambda_handler(event, context):
     # Create clients
     cognito_client = boto3.client("cognito-idp")
 
-    # Arguments
-    body = json.loads(event["body"])
     try:
+        # Arguments
+        body = json.loads(event["body"])
+
         # Change password
         cognito_client.change_password(
             PreviousPassword= body["previous_password"],
@@ -33,8 +33,12 @@ def lambda_handler(event, context):
         message = "Password changed successfully"
         return response_object(False, message)
 
+    except cognito_client.exceptions.InvalidPasswordException:
+        message = "Password does not meet the required specification"
+        return response_object(False, message, error_code = 401)
+
     except Exception as err:
-        return response_object(True, err.__str__())
+        return response_object(True, err.__str__(), error_code = 400)
 
 
 # test_event = {

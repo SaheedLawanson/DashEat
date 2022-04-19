@@ -21,9 +21,9 @@ variable DASHER_TABLE_NAME {}
 variable USER_TABLE_NAME {}
 variable VENDOR_TABLE_NAME {}
 
-# variable DASHER_USAGE_PLAN {}
-# variable USER_USAGE_PLAN {}
-# variable VENDOR_USAGE_PLAN {}
+variable DASHER_USAGE_PLAN {}
+variable USER_USAGE_PLAN {}
+variable VENDOR_USAGE_PLAN {}
 
 variable DASHER_CLIENT_ID {}
 variable USER_CLIENT_ID {}

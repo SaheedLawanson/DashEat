@@ -1,16 +1,23 @@
 import boto3, json, os
 from jsonschema import validate, exceptions
 
-# Auxiliary functions
+# EXCEPTIONS
+class ImmutableAttributeException(Exception):
+    def __init__(self, immutable_attr):
+        self.immutable_attr = immutable_attr
+
+    def __str__(self):
+        return repr(self.immutable_attr)
+
+# AUXILIARY FUNCTIONS
 # generates response object
 def response_object(error_status, message=None, data=None, error_code=400):
+    code = error_code if error_status else 200
     return {
-                "statusCode": error_code if error_status == True else 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
+                "statusCode": code,
                 "body": json.dumps({
                     "error": error_status,
+                    "status_code": code,
                     "message": message,
                     "data": data
                 })
@@ -19,13 +26,16 @@ def response_object(error_status, message=None, data=None, error_code=400):
 # Dynamically generates an update expression for dynamo db
 def generate_update_exp(form, immutable_fields):
     attr_values = {}
+    attr_keys = {}
     def immutable_exp (attr, val):
         attr_values[f":{attr}"] = val
-        return f"{attr} = if_not_exists({attr}, :{attr})"
+        attr_keys[f"#{attr}"] = attr
+        return f"#{attr} = if_not_exists(#{attr}, :{attr})"
 
     def mutable_exp(attr, val):
         attr_values[f":{attr}"] = val
-        return f"{attr} = :{attr}"
+        attr_keys[f"#{attr}"] = attr
+        return f"#{attr} = :{attr}"
 
     exp = []
     for attr, value in form.items():
@@ -36,7 +46,8 @@ def generate_update_exp(form, immutable_fields):
 
     return {
         "update_exp": f"SET {', '.join(exp)}",
-        "exp_attr_val": attr_values
+        "exp_attr_vals": attr_values,
+        "exp_attr_keys": attr_keys
     }
 
 
@@ -128,16 +139,16 @@ def lambda_handler(event, context):
         user_attrs = response["Item"]
         for attr in user_attrs:
             if attr in form:
-                message = f"The {attr} field cannot be updated"
-                return response_object(True, message)
+                raise ImmutableAttributeException(attr)
 
         # Updates table with profile
-        # Makes sure immutable attributes can only be added added but not updated
-        update_exp,  exp_attr_val = generate_update_exp(form, immutable_values[user_type]).values() # generate_update_exp ~> custom function
+        # Makes sure immutable attributes can only be added but not updated
+        update_exp,  exp_attr_vals, exp_attr_keys = generate_update_exp(form, immutable_values[user_type]).values() # generate_update_exp ~> custom function
         response = table.update_item(
             Key = { "email": current_user },
             UpdateExpression = update_exp,
-            ExpressionAttributeValues = exp_attr_val
+            ExpressionAttributeValues = exp_attr_vals,
+            ExpressionAttributeNames = exp_attr_keys
         )
         response.pop("ResponseMetadata")
 
@@ -145,8 +156,12 @@ def lambda_handler(event, context):
 
     except exceptions.ValidationError:  # jsonschema ~> imports
         message = "Incorrect parameters supplied"
-        return response_object(True, message)
+        return response_object(True, message, error_code = 401)
+
+    except ImmutableAttributeException as err:
+        message = f"The {err.__str__()} field cannot be updated"
+        return response_object(True, message, error_code = 402)
 
     except Exception as err:
-        return response_object(True, err.__str__())
+        return response_object(True, err.__str__(), error_code = 400)
 

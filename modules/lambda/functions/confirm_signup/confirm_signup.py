@@ -9,18 +9,18 @@ cognito_client_IDs = {
 
 # Auxiliary functions
 # generates response object
-def response_object(error_status, message=None, data=None, error_code = None):
+def response_object(error_status, message=None, data=None, error_code=400):
+    code = error_code if error_status else 200
     return {
-                "statusCode": error_code if error_status else 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
+                "statusCode": code,
                 "body": json.dumps({
                     "error": error_status,
+                    "status_code": code,
                     "message": message,
                     "data": data
                 })
             }
+
 
 # Main function
 def lambda_handler(event, context):

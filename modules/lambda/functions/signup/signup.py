@@ -1,6 +1,8 @@
 import os, boto3, jsonschema, re, json
-import hmac, hashlib
-from secrets import token_hex
+
+# Keys
+# DF = Defined function
+# DM = Destructured module
 
 cognito_client_IDs = {
     'dasher': os.environ["DASHER_CLIENT_ID"],
@@ -14,170 +16,150 @@ usage_plan_IDs = {
     'vendor': os.environ["VENDOR_USAGE_PLAN"]
 }
 
-# Auxiliary functions
+# CUSTOM EXCEPTIONS
+class UserExistsException(Exception):
+    pass
+class MissingFieldException(Exception):
+    pass
+class IncorrectInputFormatException(Exception):
+    pass
+
+# AUXILIARY FUNCTIONS
 # generates response object for return conditions
-def response_object(error_status, message=None, data=None, error_code=None):
+def response_object(error_status, message=None, data=None, error_code=400):
+    code = error_code if error_status else 200
     return {
-                "statusCode": error_code if error_status else 200,
-                "headers": {
-                    "Content-Type": "application/json"
-                },
+                "statusCode": code,
                 "body": json.dumps({
                     "error": error_status,
+                    "status_code": code,
                     "message": message,
                     "data": data
                 })
             }
 
-# Creates API Key for signed up users
-def create_api_key(user_ID, usage_plan_id):
+# Creates API Key for signed up users and link to appropriate usage plan
+def create_api_key(user_ID, usage_plan_ID):
     apigateway_client = boto3.client('apigateway')
 
-    try:
-        api_key = apigateway_client.create_api_key(
-            name=user_ID,
-            enabled=True,
-            generateDistinctId=True,
-        )
+    api_key = apigateway_client.create_api_key(
+        name=user_ID,
+        enabled=True,
+        generateDistinctId=True,
+    )
 
-        usage_plan_key = apigateway_client.create_usage_plan_key(
-            usagePlanId = usage_plan_id,
-            keyId = api_key["id"],
-            keyType='API_KEY'
-        )
+    usage_plan_key = apigateway_client.create_usage_plan_key(
+        usagePlanId = usage_plan_ID,
+        keyId = api_key["id"],
+        keyType='API_KEY'
+    )
 
-        data = {
-            "api_key_id": api_key["id"],
-            "api_key": api_key["value"],
-            "usage_plan_key_id": usage_plan_key["id"],
-            "usage_plan_key": usage_plan_key["value"]
-        }
-        return data
+    response = {
+        "api_key_id": api_key["id"],
+        "api_key": api_key["value"],
+        "usage_plan_key_id": usage_plan_key["id"],
+        "usage_plan_key": usage_plan_key["value"]
+    }
+    return response
 
-    except Exception as err:
-        return response_object(True, err.__str__(), error_code = 400)
-
-# signs up users
-def signup(form, required_schema, client_ID, user_attributes, table_name, user_type, ID="email"):
-
-    # Create resource clients
-    cognito_client = boto3.client('cognito-idp')
-    dynamodb_client = boto3.resource('dynamodb')
-
-    # Table
-    table = dynamodb_client.Table(table_name)
-
+# Form validation
+def form_validator(form, required_schema, table, ID):
     # Make sure form is not empty
-    if not form:
-        message = "All required fields are missing"
-        return response_object(True, message)
+    if not form: raise MissingFieldException
 
-    # Check if all required fields are supplied
-    try:
-        jsonschema.validate(
+    # Ensures submitted form conforms to given schema
+    jsonschema.validate(
             instance = form,
             schema = required_schema
         )
-    except jsonschema.exceptions.ValidationError as e:
-        return response_object(True, message = e.message, error_code = 406)
-    except Exception as e:
-        return response_object(True, message = e, error_code = 400)
 
-    # Extract attributes that are not required
-    other_attrs = {attr: form.pop(attr) for attr in list(
-        filter(lambda attr: attr not in required_schema['properties'], form)
-        )
-    }
-
-    # Make sure the email is in the right format
+    # Makes sure the email is in the right format
     if "email" in form:
         email_regex = re.compile('[a-zA-Z][a-zA-Z_\-0-9]+@[a-zA-Z]{2,}\.[a-zA-Z]{2,}')
         if not re.match(email_regex, form['email']):
-            message = "Invalid email format"
-            return response_object(True, message, error_code=412)
+            raise IncorrectInputFormatException
 
-    # Make sure a user with the same ID doesn't exist in our table already
+    # Makes sure a user with the same ID doesn't exist in our table already
     response = table.get_item(
         Key = {ID: form[ID]}
     )
     if "Item" in response:
         message = "User already exists"
-        return response_object(True, message, error_code=409)
+        raise UserExistsException
+
+    return
+
+# signs up users
+def signup(form, required_schema, client_ID, user_attributes, table_name, user_type, ID="email"):
+
+    # RESOURCE HANDLES
+    # Resource clients
+    cognito_client = boto3.client('cognito-idp')
+
+    dynamodb_client = boto3.resource('dynamodb')
+    table = dynamodb_client.Table(table_name)
+
+    # Validates the submitted form
+    form_validator(form, required_schema, table, ID) # DF ~> Ln 66
+
+    # Configure API key and usage plan
+    create_api_key(form[ID], usage_plan_IDs[user_type]) # DF ~> Ln 42
 
     # Sign up user
-    password = form.pop('password')
     try:
+        password = form.pop('password')
         response = cognito_client.sign_up(
             ClientId = client_ID,
-            # SecretHash = ,
             Username = form[ID],
             Password = password,
             UserAttributes = user_attributes,
-            ValidationData = [{"Name": ID, "Value": form[ID]}]
+            ValidationData = [{ "Name": ID, "Value": form[ID] }]
         )
-    except cognito_client.exceptions.InvalidPasswordException as e:
-        message = "Invalid password"
-        return response_object(True, message, error_code = 401)
-    except cognito_client.exceptions.UsernameExistsException as e:
-        message = "User already exists, please login"
-        return response_object(True, message, error_code = 409)
-
-    # Create API key and attach to a usage plan
-    api_key_info = create_api_key(
-        user_ID = form['email'],
-        usage_plan_id = usage_plan_IDs[user_type]
-    )
+    except cognito_client.exceptions.UsernameExistsException:
+        raise UserExistsException
 
     # Add user details to database
-    storage_form = {**form, **other_attrs, "api_key": api_key_info["api_key"]}
-    table.put_item(
-        Item = {attr: storage_form[attr] for attr in storage_form}
-    )
+    table.put_item(Item = form)
 
-    data = api_key_info
-
-    message = f"OTP has been sent to {response['CodeDeliveryDetails']['Destination']}"
-    return response_object(False, message, data)
+    return response
 
 
-
-# Main function
+# MAIN FUNCTION
 def lambda_handler(event, context):
-    # Arguments
-    form = json.loads(event["body"])
-    user_type = event["pathParameters"]["user_type"]
-
     schemas = {
-        "dasher": {
-            "type": "object",
-            "properties":{
-                "email": {"type": "string"},
-                "first_name": {"type": "string"},
-                "password": {"type": "string"}
+            "dasher": {
+                "type": "object",
+                "properties":{
+                    "email": {"type": "string"},
+                    "first_name": {"type": "string"},
+                    "password": {"type": "string"}
+                },
+                "required": ["email", "first_name", "password"],
+                "additionalProperties": False
             },
-            "required": ["email", "first_name", "password"]
-        },
-        "user": {
-            "type": "object",
-            "properties":{
-                "email": {"type": "string"},
-                "first_name": {"type": "string"},
-                "password": {"type": "string"}
+            "user": {
+                "type": "object",
+                "properties":{
+                    "email": {"type": "string"},
+                    "first_name": {"type": "string"},
+                    "password": {"type": "string"}
+                },
+                "required": ["email", "first_name", "password"],
+                "additionalProperties": False
             },
-            "required": ["email", "first_name", "password"]
-        },
-        "vendor": {
-            "type": "object",
-            "properties":{
-                "email": {"type": "string"},
-                "vendor_name": {"type": "string"},
-                "password": {"type": "string"}
-            },
-            "required": ["email", "vendor_name", "password"]
+            "vendor": {
+                "type": "object",
+                "properties":{
+                    "email": {"type": "string"},
+                    "vendor_name": {"type": "string"},
+                    "password": {"type": "string"}
+                },
+                "required": ["email", "vendor_name", "password"],
+                "additionalProperties": False
+            }
         }
-    }
 
-    attributes = {
+    attributes = lambda form: {
         "dasher": [
             {"Name": "given_name", "Value": form["first_name"]},
             {"Name": "email", "Value": form['email']}
@@ -192,18 +174,46 @@ def lambda_handler(event, context):
         ],
     }
 
-    # Sign up
-    response = signup(
-        form = form,
-        required_schema = schemas[user_type],
-        client_ID = cognito_client_IDs[user_type],
-        user_attributes = attributes[user_type],
-        user_type = user_type,
+    try:
+        # Arguments
+        form = json.loads(event["body"])
+        user_type = event["pathParameters"]["user_type"]
+
         table_name = os.environ[user_type.upper()+"_TABLE_NAME"]
-    )
 
+        # Sign up
+        response = signup(      # DF ~> Ln 93
+            form = form,
+            required_schema = schemas[user_type],
+            client_ID = cognito_client_IDs[user_type],
+            user_attributes = attributes(form)[user_type],
+            user_type = user_type,
+            table_name = table_name
+        )
 
-    return response
+        message = f"OTP has been sent to {response['CodeDeliveryDetails']['Destination']}"
+        return response_object(False, message)
+
+    except MissingFieldException:
+        message = "Required fields are missing"
+        return response_object(True, message, error_code = 401)
+
+    except IncorrectInputFormatException:
+        message = "Invalid email format"
+        return response_object(True, message, error_code = 402)
+
+    except UserExistsException:
+        message = "User already exists"
+        return response_object(True, message, error_code = 403)
+
+    except jsonschema.exceptions.ValidationError:
+        message = "Form doesn't match the required schema"
+        return response_object(True, message, error_code = 405)
+
+    except Exception as err:
+        message = "Services Error" # err.__str__()
+        return response_object(True, message, error_code = 400)
+
 
 
 # test_event = {
@@ -211,7 +221,6 @@ def lambda_handler(event, context):
 #         "email": "saheedlawanson47@gmail.com",
 #         "password": "Seedboy13",
 #         "first_name": "saheed",
-#         "user_type": "dasher"
 #     }),
 #     "pathParameters": {
 #       "user_type": "dasher"
@@ -220,22 +229,3 @@ def lambda_handler(event, context):
 
 # print(lambda_handler(test_event, None))
 
-
-# export "DASHER_CLIENT_ID"="4mg4h9m7kjjkni2gi1r217fqc9"
-# export "DASHER_TABLE_NAME"="dev_dasher_table"
-# export "DASHER_USAGE_PLAN"=" 00rfux"
-# export "USER_CLIENT_ID"="4gdl9r9ob3rpgstbcskimltlmg"
-# export "USER_TABLE_NAME"="dev_user_table"
-# export "USER_USAGE_PLAN"=" mac0kr"
-# export "VENDOR_CLIENT_ID"="72fm3cusi5u4atu29r6svktli6"
-# export "VENDOR_TABLE_NAME"="dev_vendor_table"
-# export "VENDOR_USAGE_PLAN"="2tky39"
-# export "DASHER_CLIENT_ID"="4mg4h9m7kjjkni2gi1r217fqc9"
-# export "DASHER_TABLE_NAME"="dev_dasher_table"
-# export "DASHER_USAGE_PLAN"=" 00rfux"
-# export "USER_CLIENT_ID"="4gdl9r9ob3rpgstbcskimltlmg"
-# export "USER_TABLE_NAME"="dev_user_table"
-# export "USER_USAGE_PLAN"=" mac0kr"
-# export "VENDOR_CLIENT_ID"="72fm3cusi5u4atu29r6svktli6"
-# export "VENDOR_TABLE_NAME"="dev_vendor_table"
-# export "VENDOR_USAGE_PLAN"=" 2tky39"
